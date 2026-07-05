@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>今日のタスク</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4c6ef5">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="apple-touch-icon-192.png">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="今日のタスク">
+
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --card: #ffffff;
+    --text: #1f2430;
+    --muted: #8a91a3;
+    --line: #e7eaf2;
+    --accent: #4c6ef5;
+    --accent-soft: #eaefff;
+    --done: #12b886;
+    --danger: #fa5252;
+    --p-high: #fa5252;
+    --p-high-bg: #fff0f0;
+    --p-mid: #f59f00;
+    --p-mid-bg: #fff9e6;
+    --p-low: #868e96;
+    --p-low-bg: #f1f3f5;
+    --shadow: 0 8px 24px rgba(31, 36, 48, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161c;
+      --card: #1e222b;
+      --text: #e8eaf0;
+      --muted: #8a91a3;
+      --line: #2b3040;
+      --accent-soft: #232a45;
+      --p-high-bg: #3a2224;
+      --p-mid-bg: #3a3320;
+      --p-low-bg: #262a33;
+      --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: max(24px, env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom));
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+
+  header { margin-bottom: 18px; }
+  .date { font-size: 14px; color: var(--muted); font-weight: 600; letter-spacing: .04em; }
+  h1 { font-size: 26px; margin-top: 4px; letter-spacing: .01em; }
+
+  /* tabs */
+  .tabs { display: flex; gap: 4px; background: var(--card); padding: 4px; border-radius: 12px;
+          box-shadow: var(--shadow); margin-bottom: 18px; }
+  .tabs button {
+    flex: 1; border: none; background: transparent; color: var(--muted); font-size: 14px; font-weight: 700;
+    padding: 10px; border-radius: 9px; cursor: pointer; transition: .15s;
+  }
+  .tabs button.active { background: var(--accent); color: #fff; }
+
+  /* progress */
+  .progress-card { background: var(--card); border-radius: 16px; padding: 16px 18px;
+                   box-shadow: var(--shadow); margin-bottom: 18px; }
+  .progress-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .progress-top .label { font-size: 14px; color: var(--muted); font-weight: 600; }
+  .progress-top .count { font-size: 15px; font-weight: 700; }
+  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #7c9bff);
+                border-radius: 99px; transition: width .35s ease; }
+
+  /* input */
+  .add { background: var(--card); border-radius: 14px; padding: 12px; box-shadow: var(--shadow); margin-bottom: 18px; }
+  .add-row1 { display: flex; gap: 8px; margin-bottom: 10px; }
+  .add-row1 input {
+    flex: 1; border: 1px solid var(--line); background: var(--bg); border-radius: 10px;
+    padding: 13px 14px; font-size: 16px; color: var(--text); outline: none; transition: border-color .15s;
+  }
+  .add-row1 input:focus { border-color: var(--accent); }
+  .add-row1 button {
+    border: none; background: var(--accent); color: #fff; font-size: 22px; font-weight: 600;
+    width: 50px; border-radius: 10px; cursor: pointer; transition: transform .08s, background .15s;
+  }
+  .add-row1 button:hover { background: #3b5bdb; }
+  .add-row1 button:active { transform: scale(.94); }
+  .add-row2 { display: flex; gap: 8px; }
+  .add-row2 select, .add-row2 input {
+    flex: 1; border: 1px solid var(--line); background: var(--bg); border-radius: 10px;
+    padding: 10px 12px; font-size: 14px; color: var(--text); outline: none;
+  }
+  .add-row2 input[type="time"] { -webkit-appearance: none; }
+  .memo-input {
+    width: 100%; margin-top: 8px; border: 1px solid var(--line); background: var(--bg);
+    border-radius: 10px; padding: 10px 12px; font-size: 14px; color: var(--text);
+    outline: none; resize: vertical; min-height: 40px; font-family: inherit; line-height: 1.5;
+  }
+  .memo-input:focus { border-color: var(--accent); }
+
+  /* filters */
+  .filters { display: flex; gap: 6px; margin-bottom: 12px; }
+  .filters button {
+    border: none; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600;
+    padding: 6px 12px; border-radius: 99px; cursor: pointer; transition: .15s;
+  }
+  .filters button.active { background: var(--accent-soft); color: var(--accent); }
+
+  /* list */
+  ul { list-style: none; }
+  li {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+    box-shadow: var(--shadow); animation: pop .18s ease; border-left: 4px solid transparent;
+  }
+  li.p-high { border-left-color: var(--p-high); }
+  li.p-mid  { border-left-color: var(--p-mid); }
+  li.p-low  { border-left-color: var(--p-low); }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .check {
+    flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+    border: 2px solid var(--line); cursor: pointer; position: relative; transition: .15s;
+  }
+  .check:hover { border-color: var(--accent); }
+  li.done .check { background: var(--done); border-color: var(--done); }
+  li.done .check::after {
+    content: ""; position: absolute; left: 7px; top: 3px; width: 5px; height: 10px;
+    border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+  }
+  .body { flex: 1; min-width: 0; cursor: pointer; }
+  .txt { font-size: 16px; word-break: break-word; }
+  li.done .txt { color: var(--muted); text-decoration: line-through; }
+  .meta { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+  .tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
+  .tag.time { background: var(--accent-soft); color: var(--accent); }
+  .tag.high { background: var(--p-high-bg); color: var(--p-high); }
+  .tag.mid  { background: var(--p-mid-bg); color: var(--p-mid); }
+  .tag.low  { background: var(--p-low-bg); color: var(--p-low); }
+  .memo-btn { border: none; background: var(--p-low-bg); color: var(--muted); font-size: 11px;
+              font-weight: 700; padding: 2px 8px; border-radius: 99px; cursor: pointer; }
+  .memo-btn.has { background: var(--accent-soft); color: var(--accent); }
+  .task-memo {
+    margin-top: 8px; font-size: 13px; line-height: 1.55; color: var(--muted);
+    white-space: pre-wrap; word-break: break-word; background: var(--bg);
+    border-radius: 8px; padding: 8px 10px; border-left: 3px solid var(--line); cursor: text;
+  }
+  li.done .task-memo { opacity: .6; }
+  .task-memo-edit {
+    margin-top: 8px; width: 100%; border: 1px solid var(--accent); background: var(--bg);
+    border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--text);
+    outline: none; resize: vertical; min-height: 54px; font-family: inherit; line-height: 1.5;
+  }
+  .del {
+    flex-shrink: 0; border: none; background: transparent; color: var(--muted);
+    font-size: 20px; cursor: pointer; padding: 4px 6px; border-radius: 8px; line-height: 1; transition: .15s;
+  }
+  .del:hover { color: var(--danger); background: var(--p-high-bg); }
+
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15px; }
+
+  footer { margin-top: 20px; text-align: center; }
+  .clear { border: none; background: transparent; color: var(--muted); font-size: 13px;
+           cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .clear:hover { color: var(--danger); }
+
+  /* history */
+  .day-group { margin-bottom: 22px; }
+  .day-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; padding: 0 4px; }
+  .day-head .d { font-size: 15px; font-weight: 700; }
+  .day-head .c { font-size: 13px; color: var(--done); font-weight: 700; }
+  .hist-item {
+    display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 12px;
+    padding: 11px 14px; margin-bottom: 8px; box-shadow: var(--shadow);
+  }
+  .hist-item .dot { width: 18px; height: 18px; border-radius: 50%; background: var(--done); flex-shrink: 0; position: relative; }
+  .hist-item .dot::after { content: ""; position: absolute; left: 5px; top: 2px; width: 4px; height: 8px;
+                           border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .hist-item .t { flex: 1; font-size: 15px; color: var(--muted); text-decoration: line-through; word-break: break-word; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="date" id="date"></div>
+      <h1>今日のタスク</h1>
+    </header>
+
+    <div class="tabs">
+      <button data-tab="today" class="active">タスク</button>
+      <button data-tab="history">履歴</button>
+    </div>
+
+    <!-- ===== TODAY VIEW ===== -->
+    <div id="view-today">
+      <div class="progress-card">
+        <div class="progress-top">
+          <span class="label">今日の達成状況</span>
+          <span class="count" id="count">0 / 0</span>
+        </div>
+        <div class="bar"><span id="barFill"></span></div>
+      </div>
+
+      <div class="add">
+        <div class="add-row1">
+          <input id="input" type="text" placeholder="タスクを追加…" maxlength="120" autocomplete="off">
+          <button id="addBtn" aria-label="追加">＋</button>
+        </div>
+        <div class="add-row2">
+          <select id="priority">
+            <option value="mid">優先度：中</option>
+            <option value="high">優先度：高</option>
+            <option value="low">優先度：低</option>
+          </select>
+          <input id="time" type="time" aria-label="時刻">
+        </div>
+        <textarea id="memo" class="memo-input" rows="1" maxlength="500" placeholder="メモ（任意）…"></textarea>
+      </div>
+
+      <div class="filters">
+        <button data-filter="all" class="active">すべて</button>
+        <button data-filter="active">未完了</button>
+        <button data-filter="done">完了</button>
+      </div>
+
+      <ul id="list"></ul>
+
+      <footer>
+        <button class="clear" id="clearDone">今日の完了タスクを片付ける</button>
+      </footer>
+    </div>
+
+    <!-- ===== HISTORY VIEW ===== -->
+    <div id="view-history" class="hidden">
+      <div id="history"></div>
+    </div>
+  </div>
+
+<script>
+  const TASK_KEY = "daily-tasks-v2";
+  const HIST_KEY = "daily-history-v2";
+  let tasks = [];       // 未完了は翌日以降も持ち越し。完了は当日中このリストに残す
+  let history = [];      // {date, text, priority, time}  … 過去に完了したタスクの記録
+  let filter = "all";
+  let tab = "today";
+  let editingMemoId = null;
+
+  function openMemoEditor(id) { editingMemoId = id; render(); }
+
+  const PRI_LABEL = { high: "高", mid: "中", low: "低" };
+  const PRI_ORDER = { high: 0, mid: 1, low: 2 };
+
+  function todayStr() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + p(d.getMonth()+1) + "-" + p(d.getDate());
+  }
+
+  function load() {
+    try { tasks = JSON.parse(localStorage.getItem(TASK_KEY)) || []; } catch (e) { tasks = []; }
+    try { history = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch (e) { history = []; }
+
+    // 日付をまたいだ「昨日までに完了したタスク」を履歴へ移す（未完了は残して持ち越し）
+    const today = todayStr();
+    const stillOpen = [];
+    let moved = false;
+    tasks.forEach(t => {
+      if (t.done && t.doneAt && t.doneAt !== today) {
+        history.push({ date: t.doneAt, text: t.text, priority: t.priority, time: t.time || "", memo: t.memo || "" });
+        moved = true;
+      } else {
+        stillOpen.push(t);
+      }
+    });
+    if (moved) { tasks = stillOpen; saveTasks(); saveHistory(); }
+  }
+
+  function saveTasks()   { localStorage.setItem(TASK_KEY, JSON.stringify(tasks)); }
+  function saveHistory() { localStorage.setItem(HIST_KEY, JSON.stringify(history)); }
+
+  function addTask(text, priority, time, memo) {
+    text = text.trim();
+    if (!text) return;
+    tasks.push({ id: Date.now() + Math.random(), text, priority: priority || "mid",
+                 time: time || "", memo: (memo || "").trim(), done: false, doneAt: null });
+    saveTasks(); render();
+  }
+
+  function setMemo(id, memo) {
+    const t = tasks.find(t => t.id === id);
+    if (t) { t.memo = memo.trim(); saveTasks(); render(); }
+  }
+
+  function toggle(id) {
+    const t = tasks.find(t => t.id === id);
+    if (!t) return;
+    t.done = !t.done;
+    t.doneAt = t.done ? todayStr() : null;
+    saveTasks(); render();
+  }
+
+  function remove(id) {
+    tasks = tasks.filter(t => t.id !== id);
+    saveTasks(); render();
+  }
+
+  function clearDone() {
+    // 今日完了したタスクを履歴へ移してリストから消す
+    const today = todayStr();
+    const keep = [];
+    tasks.forEach(t => {
+      if (t.done) history.push({ date: t.doneAt || today, text: t.text, priority: t.priority, time: t.time || "", memo: t.memo || "" });
+      else keep.push(t);
+    });
+    tasks = keep; saveTasks(); saveHistory(); render();
+  }
+
+  function sortTasks(arr) {
+    return arr.slice().sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;            // 未完了が上
+      const pa = PRI_ORDER[a.priority] ?? 1, pb = PRI_ORDER[b.priority] ?? 1;
+      if (pa !== pb) return pa - pb;                             // 優先度 高→低
+      if (a.time && b.time) return a.time.localeCompare(b.time); // 時刻の早い順
+      if (a.time) return -1;
+      if (b.time) return 1;
+      return 0;
+    });
+  }
+
+  function render() {
+    if (tab === "history") { renderHistory(); return; }
+
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+
+    const shown = sortTasks(tasks.filter(t =>
+      filter === "all" ? true : filter === "done" ? t.done : !t.done
+    ));
+
+    if (shown.length === 0) {
+      const msg = tasks.length === 0
+        ? "タスクを追加して一日を始めましょう ✨"
+        : (filter === "done" ? "完了したタスクはまだありません" : "未完了のタスクはありません 🎉");
+      list.innerHTML = '<div class="empty">' + msg + '</div>';
+    }
+
+    shown.forEach(t => {
+      const li = document.createElement("li");
+      li.className = (t.done ? "done " : "") + "p-" + (t.priority || "mid");
+
+      const check = document.createElement("div");
+      check.className = "check";
+      check.onclick = () => toggle(t.id);
+
+      const body = document.createElement("div");
+      body.className = "body";
+      body.onclick = () => toggle(t.id);
+
+      const txt = document.createElement("div");
+      txt.className = "txt";
+      txt.textContent = t.text;
+      body.appendChild(txt);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      if (t.time) {
+        const tg = document.createElement("span");
+        tg.className = "tag time"; tg.textContent = "🕐 " + t.time;
+        meta.appendChild(tg);
+      }
+      const pg = document.createElement("span");
+      pg.className = "tag " + (t.priority || "mid");
+      pg.textContent = "優先度 " + PRI_LABEL[t.priority || "mid"];
+      meta.appendChild(pg);
+
+      const memoBtn = document.createElement("button");
+      memoBtn.className = "memo-btn" + (t.memo ? " has" : "");
+      memoBtn.textContent = t.memo ? "📝 メモ" : "＋ メモ";
+      memoBtn.onclick = (e) => { e.stopPropagation(); openMemoEditor(t.id); };
+      meta.appendChild(memoBtn);
+
+      body.appendChild(meta);
+
+      if (editingMemoId === t.id) {
+        // メモ編集用テキストエリア
+        const ta = document.createElement("textarea");
+        ta.className = "task-memo-edit";
+        ta.value = t.memo || "";
+        ta.maxLength = 500;
+        ta.placeholder = "メモを入力…（保存: Ctrl+Enter / 取消: Esc）";
+        ta.onclick = (e) => e.stopPropagation();
+        ta.onkeydown = (e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { editingMemoId = null; setMemo(t.id, ta.value); }
+          else if (e.key === "Escape") { editingMemoId = null; render(); }
+        };
+        ta.onblur = () => { editingMemoId = null; setMemo(t.id, ta.value); };
+        body.appendChild(ta);
+        setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
+      } else if (t.memo) {
+        // メモ表示（クリックで編集）
+        const md = document.createElement("div");
+        md.className = "task-memo";
+        md.textContent = t.memo;
+        md.onclick = (e) => { e.stopPropagation(); openMemoEditor(t.id); };
+        body.appendChild(md);
+      }
+
+      const del = document.createElement("button");
+      del.className = "del";
+      del.textContent = "×";
+      del.onclick = () => remove(t.id);
+
+      li.append(check, body, del);
+      list.appendChild(li);
+    });
+
+    const total = tasks.length;
+    const done = tasks.filter(t => t.done).length;
+    document.getElementById("count").textContent = done + " / " + total;
+    document.getElementById("barFill").style.width = total ? (done/total*100) + "%" : "0%";
+  }
+
+  function renderHistory() {
+    const root = document.getElementById("history");
+    root.innerHTML = "";
+
+    if (history.length === 0) {
+      root.innerHTML = '<div class="empty">まだ記録はありません。<br>タスクを完了すると、日付ごとにここへ残ります 📖</div>';
+      return;
+    }
+
+    // 日付ごとにまとめて新しい順に表示
+    const byDay = {};
+    history.forEach(h => { (byDay[h.date] = byDay[h.date] || []).push(h); });
+    const days = Object.keys(byDay).sort().reverse();
+
+    days.forEach(date => {
+      const items = byDay[date];
+      const group = document.createElement("div");
+      group.className = "day-group";
+
+      const head = document.createElement("div");
+      head.className = "day-head";
+      const d = document.createElement("span");
+      d.className = "d"; d.textContent = formatDate(date);
+      const c = document.createElement("span");
+      c.className = "c"; c.textContent = "✓ " + items.length + " 件完了";
+      head.append(d, c);
+      group.appendChild(head);
+
+      items.slice().sort((a,b) => (a.time||"").localeCompare(b.time||"")).forEach(h => {
+        const row = document.createElement("div");
+        row.className = "hist-item";
+        const dot = document.createElement("div"); dot.className = "dot";
+        const t = document.createElement("div"); t.className = "t";
+        t.textContent = (h.time ? h.time + "　" : "") + h.text;
+        row.append(dot, t);
+        group.appendChild(row);
+        if (h.memo) {
+          const hm = document.createElement("div");
+          hm.className = "task-memo"; hm.style.marginBottom = "8px"; hm.style.cursor = "default";
+          hm.textContent = h.memo;
+          group.appendChild(hm);
+        }
+      });
+      root.appendChild(group);
+    });
+  }
+
+  function formatDate(iso) {
+    const [y, m, dd] = iso.split("-").map(Number);
+    const days = ["日","月","火","水","木","金","土"];
+    const wd = new Date(y, m-1, dd).getDay();
+    const today = todayStr();
+    const label = iso === today ? "今日 ・ " : "";
+    return label + y + "年" + m + "月" + dd + "日（" + days[wd] + "）";
+  }
+
+  function showDate() {
+    document.getElementById("date").textContent = formatDate(todayStr());
+  }
+
+  function switchTab(name) {
+    tab = name;
+    document.querySelectorAll(".tabs button").forEach(b =>
+      b.classList.toggle("active", b.dataset.tab === name));
+    document.getElementById("view-today").classList.toggle("hidden", name !== "today");
+    document.getElementById("view-history").classList.toggle("hidden", name !== "history");
+    render();
+  }
+
+  // events
+  document.getElementById("addBtn").onclick = () => {
+    const input = document.getElementById("input");
+    const pri = document.getElementById("priority").value;
+    const time = document.getElementById("time").value;
+    const memo = document.getElementById("memo").value;
+    addTask(input.value, pri, time, memo);
+    input.value = ""; document.getElementById("time").value = "";
+    document.getElementById("memo").value = ""; input.focus();
+  };
+  document.getElementById("input").addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("addBtn").click();
+  });
+  document.getElementById("clearDone").onclick = clearDone;
+  document.querySelectorAll(".filters button").forEach(btn => {
+    btn.onclick = () => {
+      filter = btn.dataset.filter;
+      document.querySelectorAll(".filters button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      render();
+    };
+  });
+  document.querySelectorAll(".tabs button").forEach(btn => {
+    btn.onclick = () => switchTab(btn.dataset.tab);
+  });
+
+  // init
+  showDate();
+  load();
+  render();
+
+  // Service Worker（ホーム画面アプリ用・http/https で配信時のみ有効）
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+</script>
+</body>
+</html>
